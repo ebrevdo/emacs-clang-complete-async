@@ -11,6 +11,7 @@ This extension is not implemented in pure elisp, it is made up of a client part
 (clang-complete binary, written in C), they work cooperately in asynchonous
 client-server fashion.
 
+
 * Experimental Feature - On the fly syntax checking
 
 An experimental feature is added to this branch --- running
@@ -18,6 +19,19 @@ An experimental feature is added to this branch --- running
 
 [[https://github.com/Golevka/emacs-clang-complete-async/raw/master/screenshots/syntax_check.png]]
 
+
+* Experimental Feature - Jump to declaration and definition
+
+You can now jump to either the declaration or the definition of the
+element your cursor is on.
+
+To jump to the definition, use =ac-clang-jump-definition=.
+
+To jump to the declaration, use =ac-clang-jump-declaration=.
+
+To jump to the definition, if it's available, otherwise to the declaration, use =ac-clang-jump-smart=.
+
+To pop the jump stack and go back to a previous location, use =ac-clang-jump-back=.
 
 * Setup
 
@@ -38,7 +52,11 @@ clang-complete executable to ~/.emacs.d/, and add the following code to your
   (setq ac-clang-complete-executable "~/.emacs.d/clang-complete")
   (setq ac-sources '(ac-source-clang-async))
   (ac-clang-launch-completion-process)
-)
+
+  ;; Optional keybindings
+  (define-key ac-mode-map (kbd "M-.") 'ac-clang-jump-smart)
+  (define-key ac-mode-map (kbd "M-,") 'ac-clang-jump-back)
+  (define-key ac-mode-map (kbd "C-c `") 'ac-clang-syntax-check))
 
 (defun my-ac-config ()
   (add-hook 'c-mode-common-hook 'ac-cc-mode-setup)

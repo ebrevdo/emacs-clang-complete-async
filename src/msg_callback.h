@@ -38,6 +38,27 @@ void completion_AcceptRequest(completion_Session *session, FILE *fp);
         source_length:[#src_length#]
         <# SOURCE CODE #>
 
+   DECLARATION: Get location of declaration at point
+   Message format:
+        row:[#row#]
+        column:[#column#]
+        source_length:[#src_length#]
+        <# SOURCE CODE #>
+
+   DECLARATION: Get location of definition at point
+   Message format:
+        row:[#row#]
+        column:[#column#]
+        source_length:[#src_length#]
+        <# SOURCE CODE #>
+
+   SMARTJUMP: Get location of definition at point.  If that fails, get the declaration.
+   Message format:
+        row:[#row#]
+        column:[#column#]
+        source_length:[#src_length#]
+        <# SOURCE CODE #>
+
    SHUTDOWN: Shut down the completion server (this program)
    [no message body]
 */
@@ -48,6 +69,9 @@ void completion_doSourcefile(completion_Session *session, FILE *fp);   /* SOURCE
 void completion_doCmdlineArgs(completion_Session *session, FILE *fp);  /* CMDLINEARGS */
 void completion_doReparse(completion_Session *session, FILE *fp);      /* REPARSE */
 void completion_doSyntaxCheck(completion_Session *session, FILE *fp);  /* SYNTAXCHECK */
+void completion_doDeclaration(completion_Session *session, FILE *fp);  /* DECLARATION */
+void completion_doDefinition(completion_Session *session, FILE *fp);   /* DEFINITION */
+void completion_doSmartJump(completion_Session *session, FILE *fp);   /* SMARTJUMP */
 void completion_doShutdown(completion_Session *session, FILE *fp);     /* SHUTDOWN */
 
 

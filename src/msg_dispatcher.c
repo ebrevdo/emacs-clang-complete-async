@@ -18,6 +18,9 @@ __command_dispatch_table[] =
     {"SOURCEFILE",   completion_doSourcefile},
     {"CMDLINEARGS",  completion_doCmdlineArgs},
     {"SYNTAXCHECK",  completion_doSyntaxCheck},
+    {"DECLARATION",  completion_doDeclaration},
+    {"DEFINITION",   completion_doDefinition},
+    {"SMARTJUMP",    completion_doSmartJump},
     {"REPARSE",      completion_doReparse},
     {"SHUTDOWN",     completion_doShutdown}
 };

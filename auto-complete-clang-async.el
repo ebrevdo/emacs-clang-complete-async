@@ -77,11 +77,18 @@ set new cflags for ac-clang from shell command output"
   (ac-clang-update-cmdlineargs))
 
 (defvar ac-clang-prefix-header nil
-  "The prefix header to pass to the Clang executable.")
+  "The prefix header (pch) to pass to the Clang executable.")
 (make-variable-buffer-local 'ac-clang-prefix-header)
+
+(defvar ac-clang-prefix-header-header nil
+  "The prefix header (pth) to pass to the Clang executable.")
+(make-variable-buffer-local 'ac-clang-prefix-header-header)
 
 (defvar ac-clang-async-do-autocompletion-automatically t
   "If autocompletion is automatically triggered when you type ., -> or ::")
+
+(defvar ac-clang-jump-stack nil
+  "The jump stack (keeps track of jumps via jump-declaration and jump-definition)")
 
 (defun ac-clang-set-prefix-header (prefix-header)
   "Set `ac-clang-prefix-header' interactively."
@@ -96,6 +103,21 @@ set new cflags for ac-clang from shell command output"
     (setq ac-clang-prefix-header nil))
    (t
     (setq ac-clang-prefix-header prefix-header))))
+
+
+(defun ac-clang-set-prefix-header-header (prefix-header)
+  "Set `ac-clang-prefix-header' interactively."
+  (interactive
+   (let ((default (car (directory-files "." t "\\([^.]h\\|[^h]\\).pth\\'" t))))
+     (list
+      (read-file-name (concat "Clang prefix header (currently " (or ac-clang-prefix-header "nil") "): ")
+                      (when default (file-name-directory default))
+                      default nil (when default (file-name-nondirectory default))))))
+  (cond
+   ((string-match "^[\s\t]*$" prefix-header)
+    (setq ac-clang-prefix-header-header nil))
+   (t
+    (setq ac-clang-prefix-header-header prefix-header))))
 
 
 (defconst ac-clang-completion-pattern
@@ -194,7 +216,9 @@ set new cflags for ac-clang from shell command output"
           (list "-x" (ac-clang-lang-option))
           ac-clang-cflags
           (when (stringp ac-clang-prefix-header)
-            (list "-include-pch" (expand-file-name ac-clang-prefix-header)))))
+            (list "-include-pch" (expand-file-name ac-clang-prefix-header)))
+          (when (stringp ac-clang-prefix-header-header)
+            (list "-include-pth" (expand-file-name ac-clang-prefix-header-header)))))
 
 
 (defsubst ac-clang-clean-document (s)
@@ -435,6 +459,27 @@ set new cflags for ac-clang from shell command output"
     (process-send-string proc (ac-clang-create-position-string (- (point) (length ac-prefix))))
     (ac-clang-send-source-code proc)))
 
+(defun ac-clang-send-declaration-request (proc)
+  (save-restriction
+    (widen)
+    (process-send-string proc "DECLARATION\n")
+    (process-send-string proc (ac-clang-create-position-string (- (point) (length ac-prefix))))
+    (ac-clang-send-source-code proc)))
+
+(defun ac-clang-send-definition-request (proc)
+  (save-restriction
+    (widen)
+    (process-send-string proc "DEFINITION\n")
+    (process-send-string proc (ac-clang-create-position-string (- (point) (length ac-prefix))))
+    (ac-clang-send-source-code proc)))
+
+(defun ac-clang-send-smart-jump-request (proc)
+  (save-restriction
+    (widen)
+    (process-send-string proc "SMARTJUMP\n")
+    (process-send-string proc (ac-clang-create-position-string (- (point) (length ac-prefix))))
+    (ac-clang-send-source-code proc)))
+
 (defun ac-clang-send-syntaxcheck-request (proc)
   (save-restriction
     (widen)
@@ -462,8 +507,7 @@ set new cflags for ac-clang from shell command output"
 
 (defun ac-clang-send-shutdown-command (proc)
   (if (eq (process-status proc) 'run)
-    (process-send-string proc "SHUTDOWN\n"))
-  )
+    (process-send-string proc "SHUTDOWN\n")))
 
 
 (defun ac-clang-append-process-output-to-process-buffer (process output)
@@ -569,7 +613,60 @@ set new cflags for ac-clang from shell command output"
     (set-process-filter ac-clang-completion-process 'ac-clang-flymake-process-filter)
     (ac-clang-send-syntaxcheck-request ac-clang-completion-process)))
 
+(defun ac-clang-jump (location)
+  (let* ((filename (pop location))
+         (row (pop location))
+         (col (pop location)))
+    (find-file filename)
+    (goto-line row)
+    (move-to-column col)))
 
+(defun ac-clang-jump-back ()
+  (interactive)
+  (when ac-clang-jump-stack
+    (ac-clang-jump (pop ac-clang-jump-stack))))
+
+(defun ac-clang-jump-declaration ()
+  (interactive)
+  (when (eq ac-clang-status 'idle)
+    (with-current-buffer (process-buffer ac-clang-completion-process)
+      (erase-buffer))
+    (setq ac-clang-status 'wait)
+    (set-process-filter ac-clang-completion-process 'ac-clang-jump-filter)
+    (ac-clang-send-declaration-request ac-clang-completion-process)))
+
+(defun ac-clang-jump-definition ()
+  (interactive)
+  (when (eq ac-clang-status 'idle)
+    (with-current-buffer (process-buffer ac-clang-completion-process)
+      (erase-buffer))
+    (setq ac-clang-status 'wait)
+    (set-process-filter ac-clang-completion-process 'ac-clang-jump-filter)
+    (ac-clang-send-definition-request ac-clang-completion-process)))
+
+(defun ac-clang-jump-smart ()
+  (interactive)
+  (when (eq ac-clang-status 'idle)
+    (with-current-buffer (process-buffer ac-clang-completion-process)
+      (erase-buffer))
+    (setq ac-clang-status 'wait)
+    (set-process-filter ac-clang-completion-process 'ac-clang-jump-filter)
+    (ac-clang-send-smart-jump-request ac-clang-completion-process)))
+
+(defun ac-clang-jump-filter (proc string)
+  (ac-clang-append-process-output-to-process-buffer proc string)
+  (setq ac-clang-status 'idle)
+  (set-process-filter ac-clang-completion-process 'ac-clang-filter-output)
+  (when (not (string= string "$"))
+    (let* ((parsed (reverse (split-string-and-unquote string)))
+           (column (- (string-to-number (pop parsed)) 1))
+           (row (string-to-number (pop parsed)))
+           (filename (combine-and-quote-strings parsed))
+           (new-loc (list filename row column))
+           (current-loc (list (buffer-file-name) (line-number-at-pos) (current-column))))
+      (when (not (equal current-loc new-loc))
+        (push current-loc ac-clang-jump-stack)
+        (ac-clang-jump new-loc)))))
 
 (defun ac-clang-shutdown-process ()
   (if ac-clang-completion-process
